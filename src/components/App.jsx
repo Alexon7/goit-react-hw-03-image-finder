@@ -1,7 +1,13 @@
 import { Component } from 'react';
 import { getImages } from '../services/pixabayAppi';
 
+import css from './App.module.css';
+
 import { SearchBar } from './SearchBar/SearchBar';
+import { ImageGallery } from './ImageGallery/ImageGallery';
+import { Button } from './Button/Button';
+import { Loader } from './Loader/Loader';
+import { Modal } from './Modal/Modal';
 
 export class App extends Component {
   state = {
@@ -16,6 +22,31 @@ export class App extends Component {
     isLoading: false,
   };
 
+  componentDidUpdate(_, prevState) {
+    const { query, page, per_page } = this.state;
+
+    if (query !== prevState.query || page !== prevState.page) {
+      this.setState({ isLoading: true });
+      getImages(query, page)
+        .then(({ hits, totalHits }) => {
+          if (hits.length === 0) {
+            this.setState({ isEmpty: true });
+            return;
+          }
+          this.setState(prevState => ({
+            images: [...prevState.images, ...hits],
+            showBtn: page < Math.ceil(totalHits / per_page),
+          }));
+        })
+        .catch(error => this.setState({ error: error.message }))
+        .finally(() => this.setState({ isLoading: false }));
+    }
+  }
+
+  loadMore = () => {
+    this.setState(prevState => ({ page: prevState.page + 1 }));
+  };
+
   onFormSubmit = query => {
     this.setState({
       query,
@@ -28,20 +59,35 @@ export class App extends Component {
       isLoading: false,
     });
   };
+  onImageClick = largeImgUrl => {
+    this.setState({ largeImgUrl });
+  };
 
   render() {
+    const { images, showBtn, error, query, isEmpty, isLoading, largeImgUrl } =
+      this.state;
+    const hasError = error.length > 0;
     return (
-      <div
-        style={{
-          height: '100vh',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          fontSize: 40,
-          color: '#010101',
-        }}
-      >
+      <div className={css.App}>
         <SearchBar onSubmit={this.onFormSubmit} />
+        {hasError && (
+          <p>
+            Oh, something went wrong <b>{error}</b>! Please, try again!
+          </p>
+        )}
+        {isEmpty && (
+          <p>
+            Oh, there is no such a query as <b>{query}</b>! Please, try again!
+          </p>
+        )}
+        {isLoading && <Loader />}
+        {Array.isArray(images) && (
+          <ImageGallery list={images} onImageClick={this.onImageClick} />
+        )}
+        {showBtn && <Button onClick={this.loadMore} />}
+        {largeImgUrl && (
+          <Modal largeImgUrl={largeImgUrl} onImageClick={this.onImageClick} />
+        )}
       </div>
     );
   }
